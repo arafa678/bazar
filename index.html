@@ -91,7 +91,7 @@
   .transfer:last-child { border-bottom: 0; }
 
   nav.nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line);
-    display: grid; grid-template-columns: repeat(4, 1fr); padding-bottom: env(safe-area-inset-bottom, 0px); }
+    display: grid; grid-template-columns: repeat(5, 1fr); padding-bottom: env(safe-area-inset-bottom, 0px); }
   .nav button { background: none; border-radius: 0; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: .75rem; padding: 10px 4px; }
   .nav button svg { width: 24px; height: 24px; }
   .nav button.active { color: var(--brand); font-weight: 700; }
@@ -101,6 +101,8 @@
   dialog h3 { margin: 0 0 6px; }
   dialog .actions { display: flex; gap: 10px; margin-top: 18px; }
   dialog .actions button { flex: 1; }
+  #receiptBox img { width: 100%; display: block; border-radius: 10px; }
+  li.tap { cursor: pointer; }
   .toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px);
     background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 999px; opacity: 0; pointer-events: none; transition: .2s; max-width: 90vw; text-align: center; z-index: 50; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -111,7 +113,10 @@
 
 <header>
   <h1>Bazar</h1>
-  <span class="month" id="monthLabel"></span>
+  <span style="display:flex;align-items:center;gap:10px">
+    <span class="month" id="monthLabel"></span>
+    <button type="button" class="btn-ghost btn-small" id="refreshBtn">Refresh</button>
+  </span>
 </header>
 
 <main>
@@ -160,6 +165,10 @@
 
   <!-- PEOPLE -->
   <section class="page" id="people" aria-label="Members">
+    <div class="card" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div><div class="sub">You are using the app as</div><div class="title" id="meName">Not chosen</div></div>
+      <button type="button" class="btn-ghost btn-small" id="changeMeBtn">Change</button>
+    </div>
     <h2>Add a member</h2>
     <div class="card">
       <div class="add-member">
@@ -179,6 +188,12 @@
     <div class="card" id="transferList"></div>
     <button type="button" class="btn-primary btn-danger" id="closeMonthBtn" style="margin-top:22px">Close month and start new</button>
   </section>
+
+  <!-- ACTIVITY -->
+  <section class="page" id="activity" aria-label="Activity log">
+    <h2>Activity log</h2>
+    <div class="card"><ul class="list" id="logList"></ul></div>
+  </section>
 </main>
 
 <nav class="nav" aria-label="Main">
@@ -194,12 +209,54 @@
   <button type="button" data-page="settle">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>Settle
   </button>
+  <button type="button" data-page="activity">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Log
+  </button>
 </nav>
 
 <dialog id="historyDlg">
   <h3 id="historyTitle"></h3>
   <div class="sub" id="historyTotal"></div>
   <ul class="list" id="historyList" style="margin-top:8px;max-height:50vh;overflow:auto"></ul>
+  <div class="actions"><button type="button" class="btn-ghost" data-close>Close</button></div>
+</dialog>
+
+<dialog id="billDlg">
+  <div id="billView">
+    <h3 id="billTitle"></h3>
+    <div class="sub" id="billMeta"></div>
+    <div class="sub" id="billAudit" style="margin-top:6px"></div>
+    <div class="actions" style="flex-wrap:wrap">
+      <button type="button" class="btn-ghost" id="billReceiptBtn">Receipt</button>
+      <button type="button" class="btn-ghost" id="billEditBtn">Edit</button>
+      <button type="button" class="btn-danger" id="billDeleteBtn">Delete</button>
+    </div>
+    <div class="actions"><button type="button" class="btn-ghost" data-close>Close</button></div>
+  </div>
+  <div id="billEdit" style="display:none">
+    <h3>Edit bill</h3>
+    <label class="field" for="editItem">Item</label>
+    <input type="text" id="editItem" maxlength="60" autocomplete="off">
+    <label class="field" for="editAmount">Amount (¥)</label>
+    <input type="number" id="editAmount" inputmode="decimal" min="1" step="any">
+    <label class="field" for="editPaidBy">Paid by</label>
+    <select id="editPaidBy"></select>
+    <div class="actions">
+      <button type="button" class="btn-ghost" id="editCancel">Cancel</button>
+      <button type="button" class="btn-primary" id="editSave" style="margin-top:0">Save changes</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="meDlg">
+  <h3>Who are you?</h3>
+  <p class="sub" style="margin:0 0 12px">Your name is saved on this phone and recorded whenever you add, edit or delete a bill.</p>
+  <div id="meList" style="display:grid;gap:8px"></div>
+</dialog>
+
+<dialog id="receiptDlg">
+  <h3 id="receiptTitle"></h3>
+  <div id="receiptBox" style="max-height:65vh;overflow:auto;margin-top:8px"></div>
   <div class="actions"><button type="button" class="btn-ghost" data-close>Close</button></div>
 </dialog>
 
@@ -216,7 +273,7 @@
 
 <script>
   // Paste your Google Apps Script Web App URL here
-  const API_URL = "https://script.google.com/macros/s/AKfycbxqHL4e2C3QPQRjlp4GJYoVc2AvQdJTMwQ10Lcjnb7SF_EWmh5opPk4evjNs9TVdRih4A/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbylseGyYYEsaVX76vJTbY6ZRKNWDk5lCvbaNq5cULbbAxmEg75OohaK5yH_TqtB02tGoQ/exec";
   const API_READY = /^https:\/\/script\.google\.com\//.test(API_URL);
 
   /* ---------- Storage ---------- */
@@ -238,6 +295,7 @@
 
   let photo = null;      // { dataUrl, name }
   let saving = false;
+  let me = store.get("bazar_me", "");
 
   const $ = id => document.getElementById(id);
   const money = n => "¥" + Math.round(n).toLocaleString();
@@ -263,6 +321,7 @@
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     window.scrollTo(0, 0);
+    if (id === "activity") loadLog();
   }
   document.querySelectorAll(".nav button").forEach(b => b.addEventListener("click", () => showPage(b.dataset.page)));
 
@@ -355,22 +414,48 @@
     if (!queue.length) return;
     for (const e of queue.slice().reverse()) {
       try {
-        await post({ action: "addExpense", id: e.id, item: e.item, amount: e.amount, paidBy: e.paidBy,
+        await post({ action: "addExpense", id: e.id, item: e.item, amount: e.amount, paidBy: e.paidBy, by: e.addedBy || "",
                      image: e.image || null, mimeType: e.image ? "image/jpeg" : null, fileName: e.fileName || null });
         e.synced = true; delete e.image; delete e.fileName;
       } catch { break; }
     }
     persist(); renderAll();
   }
+  let pulling = false;
+  async function pullFromCloud(manual) {
+    if (!API_READY || !navigator.onLine || pulling) return;
+    pulling = true;
+    try {
+      const res = await fetch(API_URL + "?action=list&t=" + Date.now());
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const out = await res.json();
+      if (!out.ok) throw new Error(out.error || "Server error");
+      const serverIds = new Set(out.expenses.map(e => e.id));
+      const pending = expenses.filter(e => !e.synced && !serverIds.has(e.id));
+      const fromServer = out.expenses.map(e => ({
+        id: e.id, item: e.item, amount: Number(e.amount), paidBy: e.paidBy, date: e.date, synced: true, hasReceipt: !!e.hasReceipt, addedBy: e.addedBy || "", editedBy: e.editedBy || ""
+      }));
+      expenses = pending.concat(fromServer).sort((a, b) => new Date(b.date) - new Date(a.date));
+      if (out.members && out.members.length) members = out.members;
+      persist(); renderAll();
+      if (manual) toast("Up to date.");
+    } catch {
+      if (manual) toast("Could not refresh. Check your connection.");
+    } finally { pulling = false; }
+  }
   $("syncBtn").addEventListener("click", async () => { await syncPending(); toast(pendingList().length ? "Still offline. Will retry." : "All synced."); });
-  window.addEventListener("online", syncPending);
+  window.addEventListener("online", () => syncPending().then(() => pullFromCloud()));
 
   /* ---------- Actions ---------- */
-  function addMember() {
+  async function addMember() {
     const input = $("newMemberName");
     const name = input.value.trim();
     if (!name) return toast("Enter a name.");
     if (members.some(m => m.toLowerCase() === name.toLowerCase())) return toast(name + " is already a member.");
+    if (API_READY) {
+      try { await post({ action: "addMember", name }); }
+      catch { return toast("Could not add. Check your connection."); }
+    }
     members.push(name); persist(); input.value = ""; renderAll(); toast(name + " added.");
   }
   $("addMemberBtn").addEventListener("click", addMember);
@@ -384,16 +469,18 @@
     if (!item) return toast("Enter what you bought.");
     if (!(amount > 0)) return toast("Enter an amount above 0.");
     if (!paidBy) return toast("Choose who paid.");
+    const who = await ensureMe();
+    if (!who) return toast("Choose your name first.");
 
     saving = true; $("saveBtn").disabled = true; $("saveBtn").textContent = "Saving…";
 
-    const entry = { id: uid(), item, amount, paidBy, date: new Date().toISOString(), synced: false };
-    if (photo) { entry.image = photo.dataUrl; entry.fileName = photo.name; }
+    const entry = { id: uid(), item, amount, paidBy, date: new Date().toISOString(), synced: false, addedBy: who };
+    if (photo) { entry.image = photo.dataUrl; entry.fileName = photo.name; entry.hasReceipt = true; }
 
     let synced = false;
     if (API_READY && navigator.onLine) {
       try {
-        await post({ action: "addExpense", id: entry.id, item, amount, paidBy,
+        await post({ action: "addExpense", id: entry.id, item, amount, paidBy, by: who,
                      image: entry.image || null, mimeType: entry.image ? "image/jpeg" : null, fileName: entry.fileName || null });
         synced = true;
       } catch { synced = false; }
@@ -413,6 +500,8 @@
   $("saveBtn").addEventListener("click", saveExpense);
 
   async function closeMonth() {
+    const who = await ensureMe();
+    if (!who) return toast("Choose your name first.");
     if (pendingList().length) {
       await syncPending();
       if (pendingList().length) return toast("Sync pending expenses before closing the month.");
@@ -425,7 +514,7 @@
     if (!ok) return;
     const btn = $("closeMonthBtn"); btn.disabled = true; btn.textContent = "Closing…";
     try {
-      if (API_READY) await post({ action: "closeMonth" });
+      if (API_READY) await post({ action: "closeMonth", by: who });
       expenses = []; persist(); renderAll(); showPage("home");
       toast("New month started.");
     } catch {
@@ -441,10 +530,147 @@
     $("historyTitle").textContent = name + "’s expenses";
     $("historyTotal").textContent = "Total paid: " + money(paidTotal(name));
     $("historyList").innerHTML = list.length
-      ? list.map(e => `<li><div class="grow"><div class="title">${esc(e.item)}</div><div class="sub">${fmtDate(e.date)}</div></div><span class="amount num">${money(e.amount)}</span></li>`).join("")
+      ? list.map(e => `<li class="tap" data-id="${esc(e.id)}"><div class="grow"><div class="title">${esc(e.item)}</div><div class="sub">${fmtDate(e.date)}</div></div>${receiptBtn(e)}<span class="amount num">${money(e.amount)}</span></li>`).join("")
       : '<li class="empty" style="display:block">No expenses yet.</li>';
     $("historyDlg").showModal();
   }
+
+  /* ---------- Identity ---------- */
+  function chooseMe() {
+    return new Promise(resolve => {
+      const dlg = $("meDlg");
+      $("meList").innerHTML = members.map(m => `<button type="button" class="btn-ghost me-opt" data-name="${esc(m)}">${esc(m)}</button>`).join("");
+      dlg.querySelectorAll(".me-opt").forEach(b => b.onclick = () => {
+        me = b.dataset.name; store.set("bazar_me", me); renderMe(); dlg.close();
+      });
+      dlg.onclose = () => resolve(me || null);
+      if (!dlg.open) dlg.showModal();
+    });
+  }
+  async function ensureMe() { return me ? me : chooseMe(); }
+  $("meDlg").addEventListener("cancel", ev => { if (!me) ev.preventDefault(); });
+
+  /* ---------- Bill details, edit, delete ---------- */
+  let currentBill = null;
+  function openBill(id) {
+    const e = expenses.find(x => x.id === id);
+    if (!e) return;
+    currentBill = e;
+    $("billTitle").textContent = e.item + " · " + money(e.amount);
+    $("billMeta").textContent = fmtDate(e.date) + " · paid by " + e.paidBy;
+    const audit = [];
+    if (e.addedBy) audit.push("Added by " + e.addedBy);
+    if (e.editedBy) audit.push("Last edited by " + e.editedBy);
+    $("billAudit").textContent = audit.join(" · ");
+    $("billReceiptBtn").style.display = (e.hasReceipt || e.image) ? "" : "none";
+    $("billEdit").style.display = "none"; $("billView").style.display = "";
+    $("billDlg").showModal();
+  }
+  $("billReceiptBtn").addEventListener("click", () => { if (currentBill) showReceipt(currentBill.id); });
+  $("billEditBtn").addEventListener("click", () => {
+    const e = currentBill; if (!e) return;
+    $("editItem").value = e.item; $("editAmount").value = e.amount;
+    const names = members.includes(e.paidBy) ? members : members.concat(e.paidBy);
+    $("editPaidBy").innerHTML = names.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+    $("editPaidBy").value = e.paidBy;
+    $("billView").style.display = "none"; $("billEdit").style.display = "";
+  });
+  $("editCancel").addEventListener("click", () => { $("billEdit").style.display = "none"; $("billView").style.display = ""; });
+
+  $("editSave").addEventListener("click", async () => {
+    const e = currentBill; if (!e) return;
+    const item = $("editItem").value.trim();
+    const amount = Number($("editAmount").value);
+    const paidBy = $("editPaidBy").value;
+    if (!item) return toast("Enter what you bought.");
+    if (!(amount > 0)) return toast("Enter an amount above 0.");
+    const who = await ensureMe();
+    if (!who) return toast("Choose your name first.");
+    const btn = $("editSave"); btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      if (API_READY && e.synced) {
+        await post({ action: "editExpense", id: e.id, item, amount, paidBy, by: who });
+        e.editedBy = who;
+      }
+      e.item = item; e.amount = amount; e.paidBy = paidBy;
+      persist(); renderAll();
+      $("billDlg").close(); $("historyDlg").close();
+      toast("Bill updated.");
+    } catch {
+      toast("Could not save. Check your connection.");
+    } finally { btn.disabled = false; btn.textContent = "Save changes"; }
+  });
+
+  $("billDeleteBtn").addEventListener("click", async () => {
+    const e = currentBill; if (!e) return;
+    const ok = await confirmDialog("Delete this bill?", e.item + " · " + money(e.amount) + ". The deletion is recorded in the activity log.", "Delete");
+    if (!ok) return;
+    const who = await ensureMe();
+    if (!who) return toast("Choose your name first.");
+    try {
+      if (API_READY && e.synced) await post({ action: "deleteExpense", id: e.id, by: who });
+      expenses = expenses.filter(x => x.id !== e.id);
+      persist(); renderAll();
+      $("billDlg").close(); $("historyDlg").close();
+      toast("Bill deleted.");
+    } catch {
+      toast("Could not delete. Check your connection.");
+    }
+  });
+
+  /* ---------- Activity log ---------- */
+  async function loadLog() {
+    const ul = $("logList");
+    const msg = t => '<li class="empty" style="display:block">' + t + '</li>';
+    if (!API_READY) { ul.innerHTML = msg("Connect cloud sync to see the activity log."); return; }
+    ul.innerHTML = msg("Loading…");
+    try {
+      const res = await fetch(API_URL + "?action=log&t=" + Date.now());
+      const out = await res.json();
+      if (!out.ok) throw new Error(out.error || "Server error");
+      ul.innerHTML = out.log.length
+        ? out.log.map(l => {
+            const t = new Date(l.time);
+            const when = isNaN(t) ? "" : t.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+            return `<li><div class="grow"><div class="title">${esc(l.by || "Unknown")} ${esc(l.action)}</div>
+                      <div class="sub">${esc(l.details || "")}</div><div class="sub">${esc(when)}</div></div></li>`;
+          }).join("")
+        : msg("No activity yet.");
+    } catch { ul.innerHTML = msg("Could not load the log. Check your connection."); }
+  }
+
+  /* ---------- Receipts ---------- */
+  const receiptCache = {};
+  function receiptBtn(e) {
+    return (e.hasReceipt || e.image)
+      ? `<button type="button" class="btn-ghost btn-small receipt-btn" data-id="${esc(e.id)}" aria-label="View receipt">Receipt</button>`
+      : "";
+  }
+  async function showReceipt(id) {
+    const e = expenses.find(x => x.id === id);
+    if (!e) return;
+    $("receiptTitle").textContent = e.item + " · " + money(e.amount);
+    const box = $("receiptBox");
+    $("receiptDlg").showModal();
+    const src = e.image || receiptCache[id];
+    if (src) { box.innerHTML = `<img alt="Receipt photo" src="${src}">`; return; }
+    box.innerHTML = '<p class="empty">Loading…</p>';
+    try {
+      const res = await fetch(API_URL + "?action=receipt&id=" + encodeURIComponent(id));
+      const out = await res.json();
+      if (!out.ok) throw new Error(out.error || "No receipt");
+      receiptCache[id] = out.image;
+      box.innerHTML = `<img alt="Receipt photo" src="${out.image}">`;
+    } catch {
+      box.innerHTML = '<p class="empty">Could not load the receipt. Check your connection.</p>';
+    }
+  }
+  document.addEventListener("click", ev => {
+    const b = ev.target.closest(".receipt-btn");
+    if (b) return showReceipt(b.dataset.id);
+    const li = ev.target.closest("li.tap");
+    if (li) openBill(li.dataset.id);
+  });
 
   /* ---------- Rendering ---------- */
   function renderPeople() {
@@ -465,9 +691,9 @@
     const ul = $("expenseList");
     ul.innerHTML = expenses.length
       ? expenses.slice(0, 30).map(e =>
-          `<li><div class="grow"><div class="title">${esc(e.item)}</div>
-             <div class="sub">${fmtDate(e.date)} · paid by ${esc(e.paidBy)}${e.synced ? "" : ' · <span class="pending">Not synced</span>'}</div></div>
-             <span class="amount num">${money(e.amount)}</span></li>`).join("")
+          `<li class="tap" data-id="${esc(e.id)}"><div class="grow"><div class="title">${esc(e.item)}</div>
+             <div class="sub">${fmtDate(e.date)} · paid by ${esc(e.paidBy)}${e.editedBy ? " · edited" : ""}${e.synced ? "" : ' · <span class="pending">Not synced</span>'}</div></div>
+             ${receiptBtn(e)}<span class="amount num">${money(e.amount)}</span></li>`).join("")
       : '<li class="empty" style="display:block">No expenses yet. Tap Add to record the first one.</li>';
   }
 
@@ -512,13 +738,19 @@
     }
   }
 
-  function renderAll() { renderPeople(); renderExpenses(); renderSettle(); renderSync(); }
+  function renderMe() { $("meName").textContent = me || "Not chosen"; }
+  function renderAll() { renderPeople(); renderExpenses(); renderSettle(); renderSync(); renderMe(); }
 
   /* ---------- Start ---------- */
   $("monthLabel").textContent = new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" });
   persist();
   renderAll();
-  syncPending();
+  if (!API_READY) $("refreshBtn").style.display = "none";
+  syncPending().then(() => pullFromCloud()).then(() => { if (!me) chooseMe(); });
+  $("changeMeBtn").addEventListener("click", () => chooseMe());
+  $("refreshBtn").addEventListener("click", async () => { await syncPending(); await pullFromCloud(true); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pullFromCloud(); });
+  setInterval(() => pullFromCloud(), 60000);
 </script>
 </body>
 </html>
